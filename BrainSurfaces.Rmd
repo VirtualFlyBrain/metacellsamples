@@ -1,0 +1,119 @@
+---
+title: "BrainSurfaces"
+author: "Gregory Jefferis"
+date: "15 September 2015"
+output: html_document
+---
+# Brain Surfaces
+
+Export brain surfaces
+
+## Preface
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+## Installation
+It is recommended to run this block (once) in an interactive R session.
+
+```{r install, eval=FALSE}
+if (!require("devtools")) install.packages("devtools")
+devtools::install_github("jefferislab/nat.flybrains", dependencies=T)
+# optional for fast reading of obj format
+devtools::install_github("jefferis/readobj")
+```
+
+## Startup
+
+```{r startup, message=FALSE}
+library(nat.flybrains)
+
+# so that we can make snapshots of 3d plots or include interactive 3d
+library(knitr)
+knit_hooks$set(rgl=hook_rgl, rgl=hook_rgl)
+```
+
+## Export data
+nat.flybrains comes with a version of the JFRC2 (aka JFRC2010) as a single surface model for the whole brain.
+
+```{r whole brain}
+library(nat)
+open3d()
+plot3d(JFRC2.surf)
+writeOBJ("JFRC2.obj")
+```
+
+We also have the individual neuropil domains
+```{r JFRC2 neuropils combined}
+clear3d()
+plot3d(JFRC2NP.surf)
+writeOBJ("JFRC2NP.obj")
+```
+
+```{r JFRC2 neuropils individual}
+outdir="JFRC2-neuropil-surfaces"
+if(!file.exists(outdir))
+  dir.create(outdir)
+
+for(domain in JFRC2NP.surf$RegionList) {
+  clear3d()
+  plot3d(JFRC2NP.surf, materials = domain)
+  writeOBJ(file.path(outdir, paste0(domain,".obj")))
+}
+```
+
+## Verification
+### Whole brain
+Let's plot the original whole brain 
+```{r, rgl=T}
+clear3d()
+plot3d(JFRC2)
+```
+
+And now read in our obj format and check it lines up
+
+```{r, rgl=T}
+library(readobj)
+JFRC2.obj=read.obj("JFRC2.obj", convert.rgl = T)
+JFRC2.obj=addNormals(JFRC2.obj)
+clear3d()
+plot3d(JFRC2)
+wire3d(JFRC2.obj, col='red')
+```
+
+Snap!
+
+### Individual domains
+
+OK, how about the invidividual domains
+
+```{r read surfaces}
+# read in the files
+objfiles=dir(outdir, full.names = T, pattern = 'obj$')
+shapes=lapply(objfiles, read.obj, convert.rgl = T)
+# assemble into single rgl shapelist
+combined_surf=shapelist3d(shapes, plot = FALSE)
+# fix normals
+combined_surf=addNormals(combined_surf)
+# add names for convenience
+domains=tools::file_path_sans_ext(basename(objfiles))
+names(combined_surf)=domains
+```
+
+Now let's actually compare some of these domains
+```{r, rgl=T}
+clear3d()
+domains_to_check=c("LH_L", "LH_R", "AL_L", "AL_R")
+# plot the re-imported domains
+sapply(combined_surf[domains_to_check], wire3d, col='red')
+```
+
+```{r, rgl=T}
+# and the original domains
+clear3d()
+sapply(combined_surf[domains_to_check], wire3d, col='red')
+plot3d(JFRC2NP.surf, domains_to_check, alpha=.3, col='grey')
+```
+
+Again, snap!
